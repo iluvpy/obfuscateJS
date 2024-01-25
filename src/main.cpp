@@ -144,6 +144,15 @@ private:
         }
         return SPACE;
     }
+
+    /*
+        removes spaces that are unnessessary 
+        eg.: 'var x = 0;    var y = 10;' -> 'var x=0;var y=10;
+        TODO:
+    */
+    static void removeRedundantSpaces(const std::string str) {
+
+    } 
 };
 
 int main(int argc, char **argv) {
