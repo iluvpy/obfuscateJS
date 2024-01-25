@@ -3,6 +3,13 @@
 #include <string>
 #include <stdexcept>
 #include <cstring>
+#include <vector>
+#include <algorithm>
+
+#define SEMICOLON 59
+#define SPACE 32
+#define TAB 9
+#define ENDLINE 10
 
 class Obfuscate {
 public:
@@ -20,33 +27,69 @@ public:
     }
 
     Obfuscate obfuscate() {
+        /* remove comments */
+        // positions of comments (start index of comment, int index of comment)
+        std::vector<std::pair<int, int>> comments;
+        char lastChar = 0;
         for (int i = 0; i < m_content.size(); i++) {
             char currentChar = m_content[i];
-            
-            // obfuscate vars
-            if ((i+2 < m_content.size()) && (currentChar == 'l' || currentChar == 'v')) {
-                std::cout << "current char: " << currentChar << std::endl;
-                std::string word;
-                for (int j = i; j < i+3; j++) {
-                    word.push_back(m_content[j]);
-                }
-                std::cout << "word: " << word << std::endl;
-                if (word == "var" || word == "let") {
-                    std::string varName;
-                    for (int j = i+4; j < m_content.size(); j++) {
-                        char currentJChar = m_content[j]; 
-                        if (j+1 < m_content.size()) {
-                            if (m_content[j+1] == '=') break;
-                        }
-                        varName.push_back(currentJChar);
+            int start = i;
+            int end = -1;
+            if (currentChar == '/' && lastChar == '/') {
+                start = i - 1;
+                for (int j = start; j < m_content.size(); j++) {
+                    if (m_content[j] == '\n') {
+                        end = j;
+                        break;
                     }
-                    std::cout << "found var: '" << varName << "'" << std::endl;
-
-                    replaceVar(varName, varName.append("yeyeye"), i+4);
                 }
+            }
+            else if (currentChar == '*' && lastChar == '/') {
+                start = i - 1;
+                for (int j = start; j+1 < m_content.size(); j++) {
+                    if (m_content[j] == '*') {
+                        if (m_content[j+1] == '/') {
+                            end = j; 
+                        }
+                    }
+                }
+            
+            }
+            if (end != -1) {
+                std::pair<int, int> startEnd = {start, end};
+                comments.push_back(startEnd);
+            }
+            lastChar = currentChar;
+            
+        }
 
+        std::string obfuscated_content = "";
+        for (int i = 0; i < m_content.size(); i++) {
+            bool isComment = false;
+            for (auto& startEnd : comments) {
+                if (i >= startEnd.first && i <= startEnd.second) { isComment = true; }
+            }
+            if (isComment) continue;
+
+            obfuscated_content.push_back(m_content[i]);
+        }
+        m_obfuscated = obfuscated_content;
+        for (int i = 1; i - 1 < m_obfuscated.size(); i++) {
+            if (m_obfuscated[i] == '\n') {
+                char lastVisibleChar = Obfuscate::getLastVisibleChar(m_obfuscated, i);
+                char nextVisibleChar = Obfuscate::getNextVisibleChar(m_obfuscated, i);
+                if (nextVisibleChar != SEMICOLON && 
+                    nextVisibleChar != ENDLINE &&
+                    nextVisibleChar != SPACE &&
+                    lastVisibleChar != SEMICOLON &&
+                    lastVisibleChar != ENDLINE) {
+                    m_obfuscated[i] = SEMICOLON; 
+                }
             }
         }
+        // remove invisible chars
+        m_obfuscated.erase(std::remove(m_obfuscated.begin(), m_obfuscated.end(), ENDLINE), m_obfuscated.end()); 
+        m_obfuscated.erase(std::remove(m_obfuscated.begin(), m_obfuscated.end(), TAB), m_obfuscated.end()); 
         return *this;
     }
 
@@ -62,17 +105,45 @@ public:
         return *this;
     }
 
-    // replaces varName with newName
-    // variableStartPointer is the index to the start of the var name inside m_content
-    // let x = 10
-    void replaceVar(const std::string &varName, const std::string &newName, int variableStartPointer) {
-    
-
+    const std::string& getObfuscated() {
+        return m_obfuscated;
     }
+
 
 private:
     std::string m_content;
+    std::string m_obfuscated;
     
+    /* 
+        returns the next char in a string after startingIndex that isn't tab/endline/space 
+        if the file ends before a visible char was found it returns 32 (SPACE)
+    */
+    static char getNextVisibleChar(const std::string& str, int startingIndex) {
+        for (int i = startingIndex + 1; i < str.size(); i++) {
+            if (str[i] != SPACE && 
+                str[i] != TAB && 
+                str[i] != ENDLINE) {
+                return str[i];
+            } 
+        }
+        return SPACE;
+    }
+
+    /*
+        returns the last char in a string before startingIndex that isn't tab/endline/space
+        if the function reaches the beginning of the string before finding a visible char
+        it returns 32 (SPACE)
+    */
+    static char getLastVisibleChar(const std::string& str, int startingIndex) {
+        for (int i = startingIndex - 1; i > 0; i--) {
+            if (str[i] != SPACE && 
+                str[i] != TAB && 
+                str[i] != ENDLINE) {
+                return str[i];
+            } 
+        }
+        return SPACE;
+    }
 };
 
 int main(int argc, char **argv) {
@@ -81,6 +152,7 @@ int main(int argc, char **argv) {
             std::string filePath = argv[1];
             Obfuscate obfuscate(filePath);
             obfuscate.obfuscate();
+            std::cout << obfuscate.getObfuscated() << std::endl;
         } 
         catch (const std::exception &e) {
             std::cerr << e.what() << std::endl;
